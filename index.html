@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https: http://localhost:* ws: wss: blob: data:; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; worker-src 'self' blob:; font-src 'self' data: https:; media-src 'self' data: blob: https:; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com;" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+
+    <!-- Primary Meta Tags -->
+    <title>Türkiye Monitor - GIS & Durum İzleme</title>
+    <meta name="title" content="Türkiye Monitor - GIS & Durum İzleme" />
+    <meta name="description" content="Türkiye odaklı gerçek zamanlı GIS izleme paneli. Deprem, yangın, haber, piyasa, enerji altyapısı ve iklim verileri tek ekranda." />
+    <meta name="keywords" content="Türkiye, GIS, deprem, yangın, AFAD, BIST, harita, izleme, durum farkındalığı, enerji, boru hattı, liman, Türkiye haritası" />
+    <meta name="theme-color" content="#0a0f0a" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Türkiye Monitor - GIS & Durum İzleme" />
+    <meta property="og:description" content="Türkiye odaklı gerçek zamanlı GIS izleme paneli. Deprem, yangın, haber, piyasa, enerji altyapısı ve iklim verileri." />
+    <meta property="og:image" content="/favico/og-image.png" />
+    <meta property="og:locale" content="tr_TR" />
+
+    <!-- JSON-LD Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Türkiye Monitor",
+      "description": "Türkiye odaklı gerçek zamanlı GIS izleme paneli.",
+      "applicationCategory": "UtilitiesApplication",
+      "operatingSystem": "Web Browser",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "TRY"
+      },
+      "featureList": [
+        "Deprem izleme (USGS)",
+        "Uydu yangın tespiti (NASA FIRMS)",
+        "Türkiye haberleri",
+        "BIST piyasa verileri",
+        "Enerji boru hatları",
+        "Liman izleme",
+        "İklim anomalileri",
+        "Boğaz trafiği"
+      ]
+    }
+    </script>
+
+    <!-- Favicons -->
+    <link rel="icon" type="image/x-icon" href="/favico/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favico/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favico/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/favico/apple-touch-icon.png" />
+
+    <!-- Theme: apply stored preference before first paint to prevent FOUC -->
+    <script>(function(){try{var t=localStorage.getItem('worldmonitor-theme');if(t==='light')document.documentElement.dataset.theme='light';}catch(e){}document.documentElement.classList.add('no-transition');})()</script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="/src/styles/main.css" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

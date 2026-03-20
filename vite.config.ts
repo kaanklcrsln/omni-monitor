@@ -107,6 +107,7 @@ function youtubeLivePlugin(): Plugin {
 }
 
 export default defineConfig({
+  base: process.env.GITHUB_ACTIONS ? '/omni-monitor/' : '/',
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
@@ -287,17 +288,6 @@ export default defineConfig({
             return `/api/v3/coins/markets?${params.toString()}`;
           }
           return `/api/v3/simple/price${qs}`;
-        },
-      },
-      // Polymarket API — proxy through production Vercel edge function
-      // Direct gamma-api.polymarket.com is blocked by Cloudflare JA3 fingerprinting
-      '/api/polymarket': {
-        target: 'https://worldmonitor.app',
-        changeOrigin: true,
-        configure: (proxy) => {
-          proxy.on('error', (err) => {
-            console.log('Polymarket proxy error:', err.message);
-          });
         },
       },
       // USGS Earthquake API

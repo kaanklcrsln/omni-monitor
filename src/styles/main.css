@@ -1089,6 +1089,14 @@ canvas,
   max-height: none;
 }
 
+/* Full panel (spans all columns) */
+.panel-full {
+  grid-column: 1 / -1;
+  grid-row: span 3;
+  min-height: 600px;
+  max-height: none;
+}
+
 /* Live News Panel */
 .live-news-switcher {
   display: flex;

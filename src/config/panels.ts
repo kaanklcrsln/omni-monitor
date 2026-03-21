@@ -6,16 +6,8 @@ import type { PanelConfig, MapLayers } from '@/types';
 const TURKEY_PANELS: Record<string, PanelConfig> = {
   map: { name: 'Türkiye Haritası', enabled: true, priority: 1 },
   'live-news': { name: 'Son Dakika', enabled: true, priority: 1 },
-  turkey: { name: 'Türkiye Haberleri', enabled: true, priority: 1 },
-  economy: { name: 'Ekonomi', enabled: true, priority: 1 },
-  security: { name: 'Güvenlik', enabled: true, priority: 1 },
-  energy: { name: 'Enerji', enabled: true, priority: 1 },
-  disasters: { name: 'Afet & Deprem', enabled: true, priority: 1 },
-  markets: { name: 'Piyasalar', enabled: true, priority: 1 },
-  economic: { name: 'Ekonomik Göstergeler', enabled: true, priority: 1 },
-  'satellite-fires': { name: 'Yangınlar', enabled: true, priority: 1 },
-  climate: { name: 'İklim Anomalileri', enabled: true, priority: 2 },
-  monitors: { name: 'Takip Listem', enabled: true, priority: 2 },
+  turkey: { name: 'HABERLER', enabled: true, priority: 1 },
+  economic: { name: 'EKONOMİ', enabled: true, priority: 1 },
 };
 
 const TURKEY_MAP_LAYERS: MapLayers = {

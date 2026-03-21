@@ -48,7 +48,7 @@ interface LiveChannel {
   useFallbackOnly?: boolean; // Skip auto-detection, always use fallback
 }
 
-const SITE_VARIANT = import.meta.env.VITE_VARIANT || 'full';
+import { SITE_VARIANT } from '@/config/variant';
 
 // Full variant: World news channels (24/7 live streams)
 const FULL_LIVE_CHANNELS: LiveChannel[] = [
@@ -62,6 +62,18 @@ const FULL_LIVE_CHANNELS: LiveChannel[] = [
   { id: 'aljazeera', name: 'AlJazeera', handle: '@AlJazeeraEnglish', fallbackVideoId: 'gCNeDWCI0vo', useFallbackOnly: true },
 ];
 
+// Turkey variant: Turkish news channels (24/7 live streams)
+const TURKEY_LIVE_CHANNELS: LiveChannel[] = [
+  { id: 'cnnturk', name: 'CNN Türk', handle: '@cnnturk', fallbackVideoId: '6N8_r2uwLEc', useFallbackOnly: true },
+  { id: 'trt', name: 'TRT Haber', handle: '@TRTHaber', fallbackVideoId: '3XHebGJG0bc', useFallbackOnly: true },
+  { id: 'haberturk', name: 'Habertürk', handle: '@haberturk', fallbackVideoId: 'RNVNlJSUFoE', useFallbackOnly: true },
+  { id: 'sozcu', name: 'Sözcü TV', handle: '@SozcuTV', fallbackVideoId: 'ztmY_cCtUl0', useFallbackOnly: true },
+  { id: 'ntv', name: 'NTV', handle: '@NTVTurkiye', fallbackVideoId: 'pqq5c6k70kk', useFallbackOnly: true },
+  { id: 'halktv', name: 'Halk TV', handle: '@halktv', fallbackVideoId: '8uNelFh0oz4', useFallbackOnly: true },
+  { id: 'haberglobal', name: 'Haber Global', handle: '@HaberGlobal', fallbackVideoId: 'EqoCJ8BPxtE', useFallbackOnly: true },
+  { id: 'tv100', name: 'TV100', handle: '@tv100', fallbackVideoId: 'JCuAFKp_WdE', useFallbackOnly: true },
+];
+
 // Tech variant: Tech & business channels
 const TECH_LIVE_CHANNELS: LiveChannel[] = [
   { id: 'bloomberg', name: 'Bloomberg', handle: '@Bloomberg', fallbackVideoId: 'iEpJwprxDdk' },
@@ -70,10 +82,14 @@ const TECH_LIVE_CHANNELS: LiveChannel[] = [
   { id: 'nasa', name: 'NASA TV', handle: '@NASA', fallbackVideoId: 'fO9e9jnhYK8', useFallbackOnly: true },
 ];
 
-const LIVE_CHANNELS = SITE_VARIANT === 'tech' ? TECH_LIVE_CHANNELS : FULL_LIVE_CHANNELS;
+const LIVE_CHANNELS =
+  SITE_VARIANT === 'tech' ? TECH_LIVE_CHANNELS :
+  SITE_VARIANT === 'turkey' ? TURKEY_LIVE_CHANNELS :
+  FULL_LIVE_CHANNELS;
 
 export class LiveNewsPanel extends Panel {
   private static apiPromise: Promise<void> | null = null;
+  private static apiLoadFailed = false;
   private activeChannel: LiveChannel = LIVE_CHANNELS[0]!;
   private channelSwitcher: HTMLElement | null = null;
   private isMuted = true;
@@ -427,6 +443,35 @@ export class LiveNewsPanel extends Panel {
     this.postToEmbed({ type: this.isMuted ? 'mute' : 'unmute' });
   }
 
+  private renderDirectIframe(videoId: string): void {
+    if (!this.playerContainer || !this.playerContainer.parentElement) {
+      this.ensurePlayerContainer();
+    }
+    if (!this.playerContainer) return;
+    this.playerContainer.innerHTML = '';
+    this.isPlayerReady = true;
+    this.currentVideoId = videoId;
+
+    const params = new URLSearchParams({
+      autoplay: this.isPlaying ? '1' : '0',
+      mute: this.isMuted ? '1' : '0',
+      rel: '0',
+      playsinline: '1',
+    });
+
+    const iframe = document.createElement('iframe');
+    iframe.className = 'live-news-embed-frame';
+    iframe.src = `https://www.youtube-nocookie.com/embed/${videoId}?${params}`;
+    iframe.title = `${this.activeChannel.name} live feed`;
+    iframe.style.width = '100%';
+    iframe.style.height = '100%';
+    iframe.style.border = '0';
+    iframe.allow = 'autoplay; encrypted-media; fullscreen';
+    iframe.allowFullscreen = true;
+    iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+    this.playerContainer.appendChild(iframe);
+  }
+
   private renderDesktopEmbed(force = false): void {
     if (!this.useDesktopEmbedProxy) return;
     void this.renderDesktopEmbedAsync(force);
@@ -487,28 +532,12 @@ export class LiveNewsPanel extends Panel {
   }
 
   private static loadYouTubeApi(): Promise<void> {
+    if (LiveNewsPanel.apiLoadFailed) return Promise.reject(new Error('YouTube IFrame API unavailable'));
     if (LiveNewsPanel.apiPromise) return LiveNewsPanel.apiPromise;
 
     LiveNewsPanel.apiPromise = new Promise((resolve, reject) => {
       if (window.YT?.Player) {
         resolve();
-        return;
-      }
-
-      const existingScript = document.querySelector<HTMLScriptElement>(
-        'script[data-youtube-iframe-api="true"]',
-      );
-
-      if (existingScript) {
-        if (window.YT?.Player) {
-          resolve();
-          return;
-        }
-        const previousReady = window.onYouTubeIframeAPIReady;
-        window.onYouTubeIframeAPIReady = () => {
-          previousReady?.();
-          resolve();
-        };
         return;
       }
 
@@ -522,7 +551,12 @@ export class LiveNewsPanel extends Panel {
       script.src = 'https://www.youtube.com/iframe_api';
       script.async = true;
       script.dataset.youtubeIframeApi = 'true';
-      script.onerror = () => reject(new Error('Failed to load YouTube IFrame API'));
+      script.onerror = () => {
+        script.remove();
+        LiveNewsPanel.apiLoadFailed = true;
+        LiveNewsPanel.apiPromise = null;
+        reject(new Error('YouTube IFrame API unavailable'));
+      };
       document.head.appendChild(script);
     });
 
@@ -546,7 +580,13 @@ export class LiveNewsPanel extends Panel {
       return;
     }
 
-    await LiveNewsPanel.loadYouTubeApi();
+    try {
+      await LiveNewsPanel.loadYouTubeApi();
+    } catch {
+      // YouTube IFrame API unavailable — fall back to direct nocookie iframe
+      this.renderDirectIframe(this.activeChannel.videoId!);
+      return;
+    }
     if (this.player || !this.playerElement) return;
 
     this.player = new window.YT!.Player(this.playerElement, {

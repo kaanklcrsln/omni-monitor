@@ -1,4 +1,4 @@
-import type { NewsItem, Monitor, PanelConfig, MapLayers, RelatedAsset, InternetOutage, SocialUnrestEvent, MilitaryFlight, MilitaryVessel, MilitaryFlightCluster, MilitaryVesselCluster, CyberThreat } from '@/types';
+import type { NewsItem, PanelConfig, MapLayers, RelatedAsset, InternetOutage, SocialUnrestEvent, MilitaryFlight, MilitaryVessel, MilitaryFlightCluster, MilitaryVesselCluster, CyberThreat } from '@/types';
 import {
   FEEDS,
   INTEL_SOURCES,
@@ -12,15 +12,14 @@ import {
   STORAGE_KEYS,
   SITE_VARIANT,
 } from '@/config';
-import { fetchCategoryFeeds, fetchMultipleStocks, fetchCrypto, fetchPredictions, fetchEarthquakes, fetchWeatherAlerts, fetchFredData, fetchInternetOutages, isOutagesConfigured, fetchAisSignals, initAisStream, getAisStatus, disconnectAisStream, isAisConfigured, fetchCableActivity, fetchProtestEvents, getProtestStatus, fetchFlightDelays, fetchMilitaryFlights, fetchMilitaryVessels, initMilitaryVesselStream, isMilitaryVesselTrackingConfigured, initDB, updateBaseline, calculateDeviation, addToSignalHistory, saveSnapshot, cleanOldSnapshots, analysisWorker, fetchPizzIntStatus, fetchGdeltTensions, fetchNaturalEvents, fetchRecentAwards, fetchOilAnalytics, fetchCyberThreats, drainTrendingSignals } from '@/services';
+import { fetchCategoryFeeds, fetchMultipleStocks, fetchCrypto, fetchPredictions, fetchEarthquakes, fetchWeatherAlerts, fetchFredData, fetchInternetOutages, isOutagesConfigured, fetchAisSignals, initAisStream, getAisStatus, disconnectAisStream, isAisConfigured, fetchCableActivity, fetchProtestEvents, getProtestStatus, fetchFlightDelays, fetchMilitaryFlights, fetchMilitaryVessels, initMilitaryVesselStream, isMilitaryVesselTrackingConfigured, initDB, updateBaseline, calculateDeviation, addToSignalHistory, analysisWorker, fetchNaturalEvents, fetchRecentAwards, fetchOilAnalytics, fetchCyberThreats, drainTrendingSignals } from '@/services';
 import { fetchCountryMarkets } from '@/services/polymarket';
 import { mlWorker } from '@/services/ml-worker';
 import { clusterNewsHybrid } from '@/services/clustering';
 import { ingestProtests, ingestFlights, ingestVessels, ingestEarthquakes, detectGeoConvergence, geoConvergenceToSignal } from '@/services/geo-convergence';
 import { signalAggregator } from '@/services/signal-aggregator';
 import { updateAndCheck } from '@/services/temporal-baseline';
-import { fetchAllFires, flattenFires, computeRegionStats } from '@/services/firms-satellite';
-import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
+import { fetchAllFires, flattenFires } from '@/services/firms-satellite';
 import { analyzeFlightsForSurge, surgeAlertToSignal, detectForeignMilitaryPresence, foreignPresenceToSignal, type TheaterPostureSummary } from '@/services/military-surge';
 import { fetchCachedTheaterPosture } from '@/services/cached-theater-posture';
 import { ingestProtestsForCII, ingestMilitaryForCII, ingestNewsForCII, ingestOutagesForCII, ingestConflictsForCII, ingestUcdpForCII, ingestHapiForCII, ingestDisplacementForCII, ingestClimateForCII, startLearning, isInLearningMode, calculateCII, getCountryData, TIER1_COUNTRIES } from '@/services/country-instability';
@@ -32,7 +31,7 @@ import { fetchUcdpEvents, deduplicateAgainstAcled } from '@/services/ucdp-events
 import { fetchUnhcrPopulation } from '@/services/unhcr';
 import { fetchClimateAnomalies } from '@/services/climate';
 import { enrichEventsWithExposure } from '@/services/population-exposure';
-import { buildMapUrl, debounce, loadFromStorage, parseMapUrlState, saveToStorage, ExportPanel, getCircuitBreakerCooldownInfo, isMobileDevice, setTheme, getCurrentTheme } from '@/utils';
+import { buildMapUrl, debounce, loadFromStorage, parseMapUrlState, saveToStorage, getCircuitBreakerCooldownInfo, isMobileDevice, setTheme, getCurrentTheme } from '@/utils';
 import { reverseGeocode } from '@/utils/reverse-geocode';
 import { CountryBriefPage } from '@/components/CountryBriefPage';
 import { maybeShowDownloadBanner } from '@/components/DownloadBanner';
@@ -52,19 +51,15 @@ import {
   MonitorPanel,
   Panel,
   SignalModal,
-  PlaybackControl,
-  StatusPanel,
   EconomicPanel,
   SearchModal,
   MobileWarningModal,
-  PizzIntIndicator,
   GdeltIntelPanel,
   LiveNewsPanel,
   CIIPanel,
   CascadePanel,
   StrategicRiskPanel,
   StrategicPosturePanel,
-  IntelligenceGapBadge,
   TechEventsPanel,
   ServiceStatusPanel,
   RuntimeConfigPanel,
@@ -131,28 +126,21 @@ export class App {
   private allNews: NewsItem[] = [];
   private newsByCategory: Record<string, NewsItem[]> = {};
   private currentTimeRange: TimeRange = '7d';
-  private monitors: Monitor[];
   private panelSettings: Record<string, PanelConfig>;
   private mapLayers: MapLayers;
   private signalModal: SignalModal | null = null;
-  private playbackControl: PlaybackControl | null = null;
-  private statusPanel: StatusPanel | null = null;
-  private exportPanel: ExportPanel | null = null;
   private searchModal: SearchModal | null = null;
   private mobileWarningModal: MobileWarningModal | null = null;
-  private pizzintIndicator: PizzIntIndicator | null = null;
   private latestPredictions: PredictionMarket[] = [];
   private latestMarkets: MarketData[] = [];
   private latestClusters: ClusteredEvent[] = [];
   private readonly applyTimeRangeFilterToNewsPanelsDebounced = debounce(() => {
     this.applyTimeRangeFilterToNewsPanels();
   }, 120);
-  private isPlaybackMode = false;
   private initialUrlState: ParsedMapUrlState | null = null;
   private inFlight: Set<string> = new Set();
   private isMobile: boolean;
   private seenGeoAlerts: Set<string> = new Set();
-  private snapshotIntervalId: ReturnType<typeof setInterval> | null = null;
   private refreshTimeoutIds: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private isDestroyed = false;
   private boundKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
@@ -180,8 +168,6 @@ export class App {
     this.container = el;
 
     this.isMobile = isMobileDevice();
-    this.monitors = loadFromStorage<Monitor[]>(STORAGE_KEYS.monitors, []);
-
     // Use mobile-specific defaults on first load (no saved layers)
     const defaultLayers = this.isMobile ? MOBILE_DEFAULT_MAP_LAYERS : DEFAULT_MAP_LAYERS;
 
@@ -308,20 +294,7 @@ export class App {
     this.signalModal.setLocationClickHandler((lat, lon) => {
       this.map?.setCenter(lat, lon, 4);
     });
-    const findingsBadge = new IntelligenceGapBadge();
-    findingsBadge.setOnSignalClick((signal) => {
-      if (this.countryBriefPage?.isVisible()) return;
-      this.signalModal?.showSignal(signal);
-    });
-    findingsBadge.setOnAlertClick((alert) => {
-      if (this.countryBriefPage?.isVisible()) return;
-      this.signalModal?.showAlert(alert);
-    });
     this.setupMobileWarning();
-    this.setupPlaybackControl();
-    this.setupStatusPanel();
-    this.setupPizzIntIndicator();
-    this.setupExportPanel();
     this.setupSearchModal();
     this.setupMapLayerHandlers();
     this.setupCountryIntel();
@@ -349,8 +322,6 @@ export class App {
     }
 
     this.setupRefreshIntervals();
-    this.setupSnapshotSaving();
-    cleanOldSnapshots();
 
     // Handle deep links for story sharing
     this.handleDeepLinks();
@@ -514,61 +485,6 @@ export class App {
     if (MobileWarningModal.shouldShow()) {
       this.mobileWarningModal = new MobileWarningModal();
       this.mobileWarningModal.show();
-    }
-  }
-
-  private setupStatusPanel(): void {
-    this.statusPanel = new StatusPanel();
-    const headerLeft = this.container.querySelector('.header-left');
-    if (headerLeft) {
-      headerLeft.appendChild(this.statusPanel.getElement());
-    }
-  }
-
-  private setupPizzIntIndicator(): void {
-    this.pizzintIndicator = new PizzIntIndicator();
-    const headerLeft = this.container.querySelector('.header-left');
-    if (headerLeft) {
-      headerLeft.appendChild(this.pizzintIndicator.getElement());
-    }
-  }
-
-  private async loadPizzInt(): Promise<void> {
-    try {
-      const [status, tensions] = await Promise.all([
-        fetchPizzIntStatus(),
-        fetchGdeltTensions()
-      ]);
-
-      // Hide indicator if no valid data (API returned default/empty)
-      if (status.locationsMonitored === 0) {
-        this.pizzintIndicator?.hide();
-        this.statusPanel?.updateApi('PizzINT', { status: 'error' });
-        return;
-      }
-
-      this.pizzintIndicator?.show();
-      this.pizzintIndicator?.updateStatus(status);
-      this.pizzintIndicator?.updateTensions(tensions);
-      this.statusPanel?.updateApi('PizzINT', { status: 'ok' });
-    } catch (error) {
-      console.error('[App] PizzINT load failed:', error);
-      this.pizzintIndicator?.hide();
-      this.statusPanel?.updateApi('PizzINT', { status: 'error' });
-    }
-  }
-
-  private setupExportPanel(): void {
-    this.exportPanel = new ExportPanel(() => ({
-      news: this.latestClusters.length > 0 ? this.latestClusters : this.allNews,
-      markets: this.latestMarkets,
-      predictions: this.latestPredictions,
-      timestamp: Date.now(),
-    }));
-
-    const headerRight = this.container.querySelector('.header-right');
-    if (headerRight) {
-      headerRight.insertBefore(this.exportPanel.getElement(), headerRight.firstChild);
     }
   }
 
@@ -1490,71 +1406,6 @@ export class App {
       .join('');
   }
 
-  private setupPlaybackControl(): void {
-    this.playbackControl = new PlaybackControl();
-    this.playbackControl.onSnapshot((snapshot) => {
-      if (snapshot) {
-        this.isPlaybackMode = true;
-        this.restoreSnapshot(snapshot);
-      } else {
-        this.isPlaybackMode = false;
-        this.loadAllData();
-      }
-    });
-
-    const headerRight = this.container.querySelector('.header-right');
-    if (headerRight) {
-      headerRight.insertBefore(this.playbackControl.getElement(), headerRight.firstChild);
-    }
-  }
-
-  private setupSnapshotSaving(): void {
-    const saveCurrentSnapshot = async () => {
-      if (this.isPlaybackMode || this.isDestroyed) return;
-
-      const marketPrices: Record<string, number> = {};
-      this.latestMarkets.forEach(m => {
-        if (m.price !== null) marketPrices[m.symbol] = m.price;
-      });
-
-      await saveSnapshot({
-        timestamp: Date.now(),
-        events: this.latestClusters,
-        marketPrices,
-        predictions: this.latestPredictions.map(p => ({
-          title: p.title,
-          yesPrice: p.yesPrice
-        })),
-        hotspotLevels: this.map?.getHotspotLevels() ?? {}
-      });
-    };
-
-    saveCurrentSnapshot();
-    this.snapshotIntervalId = setInterval(saveCurrentSnapshot, 15 * 60 * 1000);
-  }
-
-  private restoreSnapshot(snapshot: import('@/services/storage').DashboardSnapshot): void {
-    for (const panel of Object.values(this.newsPanels)) {
-      panel.showLoading();
-    }
-
-    const events = snapshot.events as ClusteredEvent[];
-    this.latestClusters = events;
-
-    const predictions = snapshot.predictions.map((p, i) => ({
-      id: `snap-${i}`,
-      title: p.title,
-      yesPrice: p.yesPrice,
-      noPrice: 1 - p.yesPrice,
-      volume24h: 0,
-      liquidity: 0,
-    }));
-    this.latestPredictions = predictions;
-    (this.panels['polymarket'] as PredictionPanel).renderPredictions(predictions);
-
-    this.map?.setHotspotLevels(snapshot.hotspotLevels);
-  }
-
   private renderLayout(): void {
     this.container.innerHTML = `
       <div class="header">
@@ -1721,11 +1572,6 @@ export class App {
   public destroy(): void {
     this.isDestroyed = true;
 
-    // Clear snapshot saving interval
-    if (this.snapshotIntervalId) {
-      clearInterval(this.snapshotIntervalId);
-      this.snapshotIntervalId = null;
-    }
 
     // Clear all refresh timeouts
     for (const timeoutId of this.refreshTimeoutIds.values()) {
@@ -1806,17 +1652,6 @@ export class App {
     const heatmapPanel = new HeatmapPanel();
     this.panels['heatmap'] = heatmapPanel;
 
-    const marketsPanel = new MarketPanel();
-    this.panels['markets'] = marketsPanel;
-
-    const monitorPanel = new MonitorPanel(this.monitors);
-    this.panels['monitors'] = monitorPanel;
-    monitorPanel.onChanged((monitors) => {
-      this.monitors = monitors;
-      saveToStorage(STORAGE_KEYS.monitors, monitors);
-      this.updateMonitorResults();
-    });
-
     const commoditiesPanel = new CommoditiesPanel();
     this.panels['commodities'] = commoditiesPanel;
 
@@ -1887,11 +1722,6 @@ export class App {
     this.newsPanels['producthunt'] = producthuntPanel;
     this.panels['producthunt'] = producthuntPanel;
 
-    const securityPanel = new NewsPanel('security', 'Cybersecurity');
-    this.attachRelatedAssetHandlers(securityPanel);
-    this.newsPanels['security'] = securityPanel;
-    this.panels['security'] = securityPanel;
-
     const policyPanel = new NewsPanel('policy', 'AI Policy & Regulation');
     this.attachRelatedAssetHandlers(policyPanel);
     this.newsPanels['policy'] = policyPanel;
@@ -1946,11 +1776,6 @@ export class App {
     this.newsPanels['asia'] = asiaPanel;
     this.panels['asia'] = asiaPanel;
 
-    const energyPanel = new NewsPanel('energy', 'Energy & Resources');
-    this.attachRelatedAssetHandlers(energyPanel);
-    this.newsPanels['energy'] = energyPanel;
-    this.panels['energy'] = energyPanel;
-
     // Dynamically create NewsPanel instances for any FEEDS category.
     // If a category key collides with an existing data panel key (e.g. markets),
     // create a separate `${key}-news` panel to avoid clobbering the data panel.
@@ -1967,6 +1792,9 @@ export class App {
       this.panels[panelKey] = panel;
     }
 
+    // Apply full-width layout to HABERLER panel
+    this.panels['turkey']?.getElement().classList.add('panel-full');
+
     // Geopolitical panels
     const gdeltIntelPanel = new GdeltIntelPanel();
     this.panels['gdelt-intel'] = gdeltIntelPanel;
@@ -1979,9 +1807,6 @@ export class App {
 
     const cascadePanel = new CascadePanel();
     this.panels['cascade'] = cascadePanel;
-
-    const satelliteFiresPanel = new SatelliteFiresPanel();
-    this.panels['satellite-fires'] = satelliteFiresPanel;
 
     const strategicRiskPanel = new StrategicRiskPanel();
     strategicRiskPanel.setLocationClickHandler((lat, lon) => {
@@ -2007,12 +1832,6 @@ export class App {
       this.map?.setCenter(lat, lon, 4);
     });
     this.panels['displacement'] = displacementPanel;
-
-    const climatePanel = new ClimateAnomalyPanel();
-    climatePanel.setZoneClickHandler((lat, lon) => {
-      this.map?.setCenter(lat, lon, 4);
-    });
-    this.panels['climate'] = climatePanel;
 
     const populationExposurePanel = new PopulationExposurePanel();
     this.panels['population-exposure'] = populationExposurePanel;
@@ -2056,13 +1875,8 @@ export class App {
       const missing = defaultOrder.filter(k => !savedOrder.includes(k));
       // Remove any saved panels that no longer exist
       const valid = savedOrder.filter(k => defaultOrder.includes(k));
-      // Insert missing panels after 'politics' (except monitors which goes at end)
-      const monitorsIdx = valid.indexOf('monitors');
-      if (monitorsIdx !== -1) valid.splice(monitorsIdx, 1); // Remove monitors temporarily
       const insertIdx = valid.indexOf('politics') + 1 || 0;
-      const newPanels = missing.filter(k => k !== 'monitors');
-      valid.splice(insertIdx, 0, ...newPanels);
-      valid.push('monitors'); // Always put monitors last
+      valid.splice(insertIdx, 0, ...missing);
       panelOrder = valid;
     }
 
@@ -2683,7 +2497,6 @@ export class App {
       { name: 'news', task: runGuarded('news', () => this.loadNews()) },
       { name: 'markets', task: runGuarded('markets', () => this.loadMarkets()) },
       { name: 'predictions', task: runGuarded('predictions', () => this.loadPredictions()) },
-      { name: 'pizzint', task: runGuarded('pizzint', () => this.loadPizzInt()) },
       { name: 'fred', task: runGuarded('fred', () => this.loadFredData()) },
       { name: 'oil', task: runGuarded('oil', () => this.loadOilAnalytics()) },
       { name: 'spending', task: runGuarded('spending', () => this.loadGovernmentSpending()) },
@@ -2893,10 +2706,6 @@ export class App {
       if (enabledFeeds.length === 0) {
         delete this.newsByCategory[category];
         if (panel) panel.showError('All sources disabled');
-        this.statusPanel?.updateFeed(category.charAt(0).toUpperCase() + category.slice(1), {
-          status: 'ok',
-          itemCount: 0,
-        });
         return [];
       }
 
@@ -2948,19 +2757,9 @@ export class App {
         panel.setDeviation(deviation.zScore, deviation.percentChange, deviation.level);
       }
 
-      this.statusPanel?.updateFeed(category.charAt(0).toUpperCase() + category.slice(1), {
-        status: 'ok',
-        itemCount: items.length,
-      });
-      this.statusPanel?.updateApi('RSS2JSON', { status: 'ok' });
 
       return items;
     } catch (error) {
-      this.statusPanel?.updateFeed(category.charAt(0).toUpperCase() + category.slice(1), {
-        status: 'error',
-        errorMessage: String(error),
-      });
-      this.statusPanel?.updateApi('RSS2JSON', { status: 'error' });
       delete this.newsByCategory[category];
       return [];
     }
@@ -3000,7 +2799,6 @@ export class App {
     if (enabledIntelSources.length === 0) {
       delete this.newsByCategory['intel'];
       if (intelPanel) intelPanel.showError('All Intel sources disabled');
-      this.statusPanel?.updateFeed('Intel', { status: 'ok', itemCount: 0 });
     } else {
       const intelResult = await Promise.allSettled([fetchCategoryFeeds(enabledIntelSources)]);
       if (intelResult[0]?.status === 'fulfilled') {
@@ -3011,7 +2809,6 @@ export class App {
           const deviation = calculateDeviation(intel.length, baseline);
           intelPanel.setDeviation(deviation.zScore, deviation.percentChange, deviation.level);
         }
-        this.statusPanel?.updateFeed('Intel', { status: 'ok', itemCount: intel.length });
         collectedNews.push(...intel);
         this.flashMapForNews(intel);
       } else {
@@ -3080,13 +2877,11 @@ export class App {
       (this.panels['markets'] as MarketPanel).renderMarkets(stocksResult.data);
 
       if (stocksResult.skipped) {
-        this.statusPanel?.updateApi('Finnhub', { status: 'error' });
         if (stocksResult.data.length === 0) {
           this.panels['markets']?.showConfigError(finnhubConfigMsg);
         }
         this.panels['heatmap']?.showConfigError(finnhubConfigMsg);
       } else {
-        this.statusPanel?.updateApi('Finnhub', { status: 'ok' });
 
         const sectorsResult = await fetchMultipleStocks(
           SECTORS.map((s) => ({ ...s, display: s.name })),
@@ -3119,16 +2914,13 @@ export class App {
         commoditiesResult.data.map((c) => ({ display: c.display, price: c.price, change: c.change, sparkline: c.sparkline }))
       );
     } catch {
-      this.statusPanel?.updateApi('Finnhub', { status: 'error' });
     }
 
     try {
       // Crypto
       const crypto = await fetchCrypto();
       (this.panels['crypto'] as CryptoPanel).renderCrypto(crypto);
-      this.statusPanel?.updateApi('CoinGecko', { status: 'ok' });
     } catch {
-      this.statusPanel?.updateApi('CoinGecko', { status: 'error' });
     }
   }
 
@@ -3138,15 +2930,11 @@ export class App {
       this.latestPredictions = predictions;
       (this.panels['polymarket'] as PredictionPanel).renderPredictions(predictions);
 
-      this.statusPanel?.updateFeed('Polymarket', { status: 'ok', itemCount: predictions.length });
-      this.statusPanel?.updateApi('Polymarket', { status: 'ok' });
       dataFreshness.recordUpdate('polymarket', predictions.length);
 
       // Run correlation analysis in background (fire-and-forget via Web Worker)
       void this.runCorrelationAnalysis();
     } catch (error) {
-      this.statusPanel?.updateFeed('Polymarket', { status: 'error', errorMessage: String(error) });
-      this.statusPanel?.updateApi('Polymarket', { status: 'error' });
       dataFreshness.recordError('polymarket', String(error));
     }
   }
@@ -3163,27 +2951,18 @@ export class App {
       this.intelligenceCache.earthquakes = earthquakeResult.value;
       this.map?.setEarthquakes(earthquakeResult.value);
       ingestEarthquakes(earthquakeResult.value);
-      this.statusPanel?.updateApi('USGS', { status: 'ok' });
       dataFreshness.recordUpdate('usgs', earthquakeResult.value.length);
     } else {
       this.intelligenceCache.earthquakes = [];
       this.map?.setEarthquakes([]);
-      this.statusPanel?.updateApi('USGS', { status: 'error' });
       dataFreshness.recordError('usgs', String(earthquakeResult.reason));
     }
 
     // Handle natural events (EONET - storms, fires, volcanoes, etc.)
     if (eonetResult.status === 'fulfilled') {
       this.map?.setNaturalEvents(eonetResult.value);
-      this.statusPanel?.updateFeed('EONET', {
-        status: 'ok',
-        itemCount: eonetResult.value.length,
-      });
-      this.statusPanel?.updateApi('NASA EONET', { status: 'ok' });
     } else {
       this.map?.setNaturalEvents([]);
-      this.statusPanel?.updateFeed('EONET', { status: 'error', errorMessage: String(eonetResult.reason) });
-      this.statusPanel?.updateApi('NASA EONET', { status: 'error' });
     }
 
     // Set layer ready based on combined data
@@ -3232,14 +3011,12 @@ export class App {
 
       this.map?.setTechEvents(mapEvents);
       this.map?.setLayerReady('techEvents', mapEvents.length > 0);
-      this.statusPanel?.updateFeed('Tech Events', { status: 'ok', itemCount: mapEvents.length });
 
       // Tech events search registration removed (Turkey-only variant)
     } catch (error) {
       console.error('[App] Failed to load tech events:', error);
       this.map?.setTechEvents([]);
       this.map?.setLayerReady('techEvents', false);
-      this.statusPanel?.updateFeed('Tech Events', { status: 'error', errorMessage: String(error) });
     }
   }
 
@@ -3248,11 +3025,9 @@ export class App {
       const alerts = await fetchWeatherAlerts();
       this.map?.setWeatherAlerts(alerts);
       this.map?.setLayerReady('weather', alerts.length > 0);
-      this.statusPanel?.updateFeed('Weather', { status: 'ok', itemCount: alerts.length });
       dataFreshness.recordUpdate('weather', alerts.length);
     } catch (error) {
       this.map?.setLayerReady('weather', false);
-      this.statusPanel?.updateFeed('Weather', { status: 'error' });
       dataFreshness.recordError('weather', String(error));
     }
   }
@@ -3286,7 +3061,6 @@ export class App {
         if (this.mapLayers.outages) {
           this.map?.setOutages(outages);
           this.map?.setLayerReady('outages', outages.length > 0);
-          this.statusPanel?.updateFeed('NetBlocks', { status: 'ok', itemCount: outages.length });
         }
       } catch (error) {
         console.error('[Intelligence] Outages fetch failed:', error);
@@ -3310,12 +3084,6 @@ export class App {
         if (this.mapLayers.protests) {
           this.map?.setProtests(protestData.events);
           this.map?.setLayerReady('protests', protestData.events.length > 0);
-          const status = getProtestStatus();
-          this.statusPanel?.updateFeed('Protests', {
-            status: 'ok',
-            itemCount: protestData.events.length,
-            errorMessage: status.acledConfigured === false ? 'ACLED not configured - using GDELT only' : undefined,
-          });
         }
         return protestData.events;
       } catch (error) {
@@ -3396,11 +3164,6 @@ export class App {
           this.map?.setMilitaryFlights(flightData.flights, flightData.clusters);
           this.map?.setMilitaryVessels(vesselData.vessels, vesselData.clusters);
           this.map?.updateMilitaryForEscalation(flightData.flights, vesselData.vessels);
-          const militaryCount = flightData.flights.length + vesselData.vessels.length;
-          this.statusPanel?.updateFeed('Military', {
-            status: militaryCount > 0 ? 'ok' : 'warning',
-            itemCount: militaryCount,
-          });
         }
         // Detect military airlift surges and foreign presence (suppress during learning mode)
         if (!isInLearningMode()) {
@@ -3526,7 +3289,6 @@ export class App {
       const outages = this.intelligenceCache.outages;
       this.map?.setOutages(outages);
       this.map?.setLayerReady('outages', outages.length > 0);
-      this.statusPanel?.updateFeed('NetBlocks', { status: 'ok', itemCount: outages.length });
       return;
     }
     try {
@@ -3536,11 +3298,9 @@ export class App {
       this.map?.setLayerReady('outages', outages.length > 0);
       ingestOutagesForCII(outages);
       signalAggregator.ingestOutages(outages);
-      this.statusPanel?.updateFeed('NetBlocks', { status: 'ok', itemCount: outages.length });
       dataFreshness.recordUpdate('outages', outages.length);
     } catch (error) {
       this.map?.setLayerReady('outages', false);
-      this.statusPanel?.updateFeed('NetBlocks', { status: 'error' });
       dataFreshness.recordError('outages', String(error));
     }
   }
@@ -3555,7 +3315,6 @@ export class App {
     if (this.cyberThreatsCache) {
       this.map?.setCyberThreats(this.cyberThreatsCache);
       this.map?.setLayerReady('cyberThreats', this.cyberThreatsCache.length > 0);
-      this.statusPanel?.updateFeed('Cyber Threats', { status: 'ok', itemCount: this.cyberThreatsCache.length });
       return;
     }
 
@@ -3564,11 +3323,9 @@ export class App {
       this.cyberThreatsCache = threats;
       this.map?.setCyberThreats(threats);
       this.map?.setLayerReady('cyberThreats', threats.length > 0);
-      this.statusPanel?.updateFeed('Cyber Threats', { status: 'ok', itemCount: threats.length });
       dataFreshness.recordUpdate('cyber_threats', threats.length);
     } catch (error) {
       this.map?.setLayerReady('cyberThreats', false);
-      this.statusPanel?.updateFeed('Cyber Threats', { status: 'error', errorMessage: String(error) });
       dataFreshness.recordError('cyber_threats', String(error));
     }
   }
@@ -3590,23 +3347,11 @@ export class App {
       const hasData = disruptions.length > 0 || density.length > 0;
       this.map?.setLayerReady('ais', hasData);
 
-      const shippingCount = disruptions.length + density.length;
-      const shippingStatus = shippingCount > 0 ? 'ok' : (aisStatus.connected ? 'warning' : 'error');
-      this.statusPanel?.updateFeed('Shipping', {
-        status: shippingStatus,
-        itemCount: shippingCount,
-        errorMessage: !aisStatus.connected && shippingCount === 0 ? 'AIS snapshot unavailable' : undefined,
-      });
-      this.statusPanel?.updateApi('AISStream', {
-        status: aisStatus.connected ? 'ok' : 'warning',
-      });
       if (hasData) {
-        dataFreshness.recordUpdate('ais', shippingCount);
+        dataFreshness.recordUpdate('ais', disruptions.length + density.length);
       }
     } catch (error) {
       this.map?.setLayerReady('ais', false);
-      this.statusPanel?.updateFeed('Shipping', { status: 'error', errorMessage: String(error) });
-      this.statusPanel?.updateApi('AISStream', { status: 'error' });
       dataFreshness.recordError('ais', String(error));
     }
   }
@@ -3628,10 +3373,6 @@ export class App {
       if (attempts >= maxAttempts) {
         this.map?.setLayerLoading('ais', false);
         this.map?.setLayerReady('ais', false);
-        this.statusPanel?.updateFeed('Shipping', {
-          status: 'error',
-          errorMessage: 'Connection timeout'
-        });
         return;
       }
 
@@ -3645,10 +3386,7 @@ export class App {
     try {
       const activity = await fetchCableActivity();
       this.map?.setCableActivity(activity.advisories, activity.repairShips);
-      const itemCount = activity.advisories.length + activity.repairShips.length;
-      this.statusPanel?.updateFeed('CableOps', { status: 'ok', itemCount });
     } catch {
-      this.statusPanel?.updateFeed('CableOps', { status: 'error' });
     }
   }
 
@@ -3659,17 +3397,9 @@ export class App {
       this.map?.setProtests(protestData.events);
       this.map?.setLayerReady('protests', protestData.events.length > 0);
       const status = getProtestStatus();
-      this.statusPanel?.updateFeed('Protests', {
-        status: 'ok',
-        itemCount: protestData.events.length,
-        errorMessage: status.acledConfigured === false ? 'ACLED not configured - using GDELT only' : undefined,
-      });
       if (status.acledConfigured === true) {
-        this.statusPanel?.updateApi('ACLED', { status: 'ok' });
       } else if (status.acledConfigured === null) {
-        this.statusPanel?.updateApi('ACLED', { status: 'warning' });
       }
-      this.statusPanel?.updateApi('GDELT', { status: 'ok' });
       return;
     }
     try {
@@ -3685,22 +3415,11 @@ export class App {
       if (protestData.sources.gdelt > 0) dataFreshness.recordUpdate('gdelt', protestData.sources.gdelt);
       (this.panels['cii'] as CIIPanel)?.refresh();
       const status = getProtestStatus();
-      this.statusPanel?.updateFeed('Protests', {
-        status: 'ok',
-        itemCount: protestData.events.length,
-        errorMessage: status.acledConfigured === false ? 'ACLED not configured - using GDELT only' : undefined,
-      });
       if (status.acledConfigured === true) {
-        this.statusPanel?.updateApi('ACLED', { status: 'ok' });
       } else if (status.acledConfigured === null) {
-        this.statusPanel?.updateApi('ACLED', { status: 'warning' });
       }
-      this.statusPanel?.updateApi('GDELT', { status: 'ok' });
     } catch (error) {
       this.map?.setLayerReady('protests', false);
-      this.statusPanel?.updateFeed('Protests', { status: 'error', errorMessage: String(error) });
-      this.statusPanel?.updateApi('ACLED', { status: 'error' });
-      this.statusPanel?.updateApi('GDELT', { status: 'error' });
     }
   }
 
@@ -3709,15 +3428,8 @@ export class App {
       const delays = await fetchFlightDelays();
       this.map?.setFlightDelays(delays);
       this.map?.setLayerReady('flights', delays.length > 0);
-      this.statusPanel?.updateFeed('Flights', {
-        status: 'ok',
-        itemCount: delays.length,
-      });
-      this.statusPanel?.updateApi('FAA', { status: 'ok' });
     } catch (error) {
       this.map?.setLayerReady('flights', false);
-      this.statusPanel?.updateFeed('Flights', { status: 'error', errorMessage: String(error) });
-      this.statusPanel?.updateApi('FAA', { status: 'error' });
     }
   }
 
@@ -3734,13 +3446,6 @@ export class App {
       insightsPanel?.setMilitaryFlights(flights);
       const hasData = flights.length > 0 || vessels.length > 0;
       this.map?.setLayerReady('military', hasData);
-      const militaryCount = flights.length + vessels.length;
-      this.statusPanel?.updateFeed('Military', {
-        status: militaryCount > 0 ? 'ok' : 'warning',
-        itemCount: militaryCount,
-        errorMessage: militaryCount === 0 ? 'No military activity in view' : undefined,
-      });
-      this.statusPanel?.updateApi('OpenSky', { status: 'ok' });
       return;
     }
     try {
@@ -3795,18 +3500,9 @@ export class App {
 
       const hasData = flightData.flights.length > 0 || vesselData.vessels.length > 0;
       this.map?.setLayerReady('military', hasData);
-      const militaryCount = flightData.flights.length + vesselData.vessels.length;
-      this.statusPanel?.updateFeed('Military', {
-        status: militaryCount > 0 ? 'ok' : 'warning',
-        itemCount: militaryCount,
-        errorMessage: militaryCount === 0 ? 'No military activity in view' : undefined,
-      });
-      this.statusPanel?.updateApi('OpenSky', { status: 'ok' });
       dataFreshness.recordUpdate('opensky', flightData.flights.length);
     } catch (error) {
       this.map?.setLayerReady('military', false);
-      this.statusPanel?.updateFeed('Military', { status: 'error', errorMessage: String(error) });
-      this.statusPanel?.updateApi('OpenSky', { status: 'error' });
       dataFreshness.recordError('opensky', String(error));
     }
   }
@@ -3835,7 +3531,6 @@ export class App {
     const cbInfo = getCircuitBreakerCooldownInfo('FRED Economic');
     if (cbInfo.onCooldown) {
       economicPanel?.setErrorState(true, `Temporarily unavailable (retry in ${cbInfo.remainingSeconds}s)`);
-      this.statusPanel?.updateApi('FRED', { status: 'error' });
       return;
     }
 
@@ -3847,7 +3542,6 @@ export class App {
       const postInfo = getCircuitBreakerCooldownInfo('FRED Economic');
       if (postInfo.onCooldown) {
         economicPanel?.setErrorState(true, `Temporarily unavailable (retry in ${postInfo.remainingSeconds}s)`);
-        this.statusPanel?.updateApi('FRED', { status: 'error' });
         return;
       }
 
@@ -3856,16 +3550,13 @@ export class App {
           ? 'FRED data temporarily unavailable — will retry'
           : 'FRED_API_KEY not configured — add in Settings';
         economicPanel?.setErrorState(true, reason);
-        this.statusPanel?.updateApi('FRED', { status: 'error' });
         return;
       }
 
       economicPanel?.setErrorState(false);
       economicPanel?.update(data);
-      this.statusPanel?.updateApi('FRED', { status: 'ok' });
       dataFreshness.recordUpdate('economic', data.length);
     } catch {
-      this.statusPanel?.updateApi('FRED', { status: 'error' });
       economicPanel?.setErrorState(true, 'FRED data temporarily unavailable — will retry');
       economicPanel?.setLoading(false);
     }
@@ -3941,15 +3632,11 @@ export class App {
     try {
       const fireResult = await fetchAllFires(1);
       if (fireResult.skipped) {
-        this.panels['satellite-fires']?.showConfigError('NASA_FIRMS_API_KEY not configured — add in Settings');
-        this.statusPanel?.updateApi('FIRMS', { status: 'error' });
         return;
       }
       const { regions, totalCount } = fireResult;
       if (totalCount > 0) {
         const flat = flattenFires(regions);
-        const stats = computeRegionStats(regions);
-
         // Feed signal aggregator
         signalAggregator.ingestSatelliteFires(flat.map(f => ({
           lat: f.lat,
@@ -3964,8 +3651,7 @@ export class App {
         this.map?.setFires(flat);
 
         // Feed panel
-        (this.panels['satellite-fires'] as SatelliteFiresPanel)?.update(stats, totalCount);
-
+        
         dataFreshness.recordUpdate('firms', totalCount);
 
         // Report to temporal baseline (fire-and-forget)
@@ -3978,14 +3664,10 @@ export class App {
         }).catch(() => {});
       } else {
         // Still update panel so it exits loading spinner
-        (this.panels['satellite-fires'] as SatelliteFiresPanel)?.update([], 0);
-      }
-      this.statusPanel?.updateApi('FIRMS', { status: 'ok' });
+              }
     } catch (e) {
       console.warn('[App] FIRMS load failed:', e);
-      (this.panels['satellite-fires'] as SatelliteFiresPanel)?.update([], 0);
-      this.statusPanel?.updateApi('FIRMS', { status: 'error' });
-      dataFreshness.recordError('firms', String(e));
+            dataFreshness.recordError('firms', String(e));
     }
   }
 
@@ -4038,11 +3720,9 @@ export class App {
   }
 
   private setupRefreshIntervals(): void {
-    // Always refresh news, markets, predictions, pizzint
     this.scheduleRefresh('news', () => this.loadNews(), REFRESH_INTERVALS.feeds);
     this.scheduleRefresh('markets', () => this.loadMarkets(), REFRESH_INTERVALS.markets);
     this.scheduleRefresh('predictions', () => this.loadPredictions(), REFRESH_INTERVALS.predictions);
-    this.scheduleRefresh('pizzint', () => this.loadPizzInt(), 10 * 60 * 1000);
 
     // Only refresh layer data if layer is enabled
     this.scheduleRefresh('natural', () => this.loadNatural(), 5 * 60 * 1000, () => this.mapLayers.natural);

@@ -1,4 +1,6 @@
 > **Attribution Notice:** This project is forked from [https://github.com/koala73/worldmonitor](https://github.com/koala73/worldmonitor). The original codebase was adapted and scoped down to Turkey only for academic presentation purposes. I am **not** the original author of this project.
+> 
+<img width="1800" height="544" alt="logo_00000" src="https://github.com/user-attachments/assets/1362cf84-acd7-40fd-a46f-d42884c28be7" />
 
 ---
 

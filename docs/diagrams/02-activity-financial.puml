@@ -1,0 +1,31 @@
+@startuml Activity_Financial_Monitoring
+title Activity Diagram - Financial Monitoring with Geopolitical Context
+
+start
+:MarketPanel fetches Yahoo Finance
+(BIST 100, BIST 30, BIST Banka,
+USDTRY, EURTRY, GBPTRY, gold, oil);
+note right: refresh every 2 min
+
+fork
+  :Render market panel values and trend arrows;
+fork again
+  :NewsPanel aggregates ekonomi feeds
+  (Bloomberg HT, TCMB, BIST);
+  note right: refresh every 5 min
+end fork
+
+:User observes TRY depreciation or index drop;
+
+if (Economic news volume spike
+or keyword match on takiplistem?) then (yes)
+  :Correlate news items with market move;
+  :Highlight configured hotspots on map
+  (from geo.ts: Ankara, Istanbul, ...);
+  :User correlates finance with geopolitics;
+else (no)
+  :Continue passive monitoring;
+endif
+
+stop
+@enduml

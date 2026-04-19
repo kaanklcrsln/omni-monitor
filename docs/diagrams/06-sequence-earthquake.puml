@@ -1,0 +1,34 @@
+@startuml Sequence_Earthquake
+title Sequence Diagram - Earthquake Fetch, Render, Alert
+
+actor User
+participant "App.ts" as App
+participant "earthquakes.ts" as Svc
+participant "Vite Proxy\n/api/earthquakes" as Proxy
+participant "USGS API" as USGS
+participant "DeckGLMap" as Map
+participant "MonitorPanel\n(takiplistem)" as Mon
+
+App -> Svc : fetchEarthquakes(bbox=Turkey)
+Svc -> Proxy : GET /api/earthquakes?bbox
+Proxy -> USGS : GET query?format=geojson&minlat..
+USGS --> Proxy : GeoJSON features
+Proxy --> Svc : JSON payload
+Svc --> App : Earthquake[]
+
+App -> Map : addEarthquakeLayer(events)
+Map --> User : points rendered on map
+
+User -> Map : click(point)
+Map -> App : onFeatureClick(eq)
+App --> User : popup(depth, magnitude, place, time)
+
+loop for each new eq
+  App -> Mon : evaluate(eq, keywords, threshold)
+  alt magnitude >= threshold AND keyword match
+    Mon --> User : push alert to takiplistem
+  else
+    Mon --> App : ignore
+  end
+end
+@enduml

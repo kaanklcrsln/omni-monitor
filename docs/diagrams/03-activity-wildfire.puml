@@ -1,0 +1,27 @@
+@startuml Activity_Wildfire_Infrastructure
+title Activity Diagram - Wildfire + Infrastructure Risk
+
+start
+:Proxy /api/firms fetches MODIS/VIIRS hotspots
+(bbox filtered to Turkey);
+note right: poll every 5 min
+
+:Render fire points on map layer;
+
+:User enables pipelines overlay
+(BTC, TANAP, TurkAkim, Mavi Akim,
+Kerkuk-Ceyhan, Iran-Turkiye);
+
+:Compute distance(fire, pipeline segment);
+
+if (min distance <= proximity threshold?) then (yes)
+  :Flag pipeline segment as at-risk;
+  :Load related items in afet and enerji panels;
+  :Raise visual alert on map;
+else (no)
+  :Keep fire points without alert;
+endif
+
+:User identifies fires threatening critical infrastructure;
+stop
+@enduml

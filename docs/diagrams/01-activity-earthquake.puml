@@ -1,0 +1,25 @@
+@startuml Activity_Earthquake_Monitoring
+title Activity Diagram - Earthquake Monitoring
+
+start
+:Proxy /api/earthquakes fetches USGS feed
+(bbox filtered to Turkey);
+:Parse events into Earthquake entities;
+:Render points on DeckGL/MapLibre layer;
+
+repeat
+  :User clicks earthquake marker;
+  :Show popup (depth, magnitude, place, time);
+repeat while (User explores more events?) is (yes)
+->no;
+
+if (Magnitude >= user threshold
+AND matches MonitorPanel keyword?) then (yes)
+  :Push notification to takiplistem panel;
+else (no)
+  :Keep event on map only;
+endif
+
+:User gains spatial/temporal awareness;
+stop
+@enduml

@@ -1,0 +1,43 @@
+@startuml Sequence_Keyword_Aggregation
+title Sequence Diagram - Keyword Filter + Multi-Source Signal Aggregation
+
+actor User
+participant "MonitorPanel\n(takiplistem)" as Mon
+participant "App.ts" as App
+participant "rss.ts" as RSS
+participant "Vite Proxy\n/api/rss-proxy" as Proxy
+participant "Feeds\n(AA, TRT, ...)" as Feeds
+participant "signal-aggregator.ts" as Agg
+participant "DeckGLMap" as Map
+
+User -> Mon : addKeyword("deprem")
+Mon -> App : registerKeyword(kw)
+
+loop every 5 min
+  App -> RSS : fetchAll(feeds)
+  RSS -> Proxy : GET /api/rss-proxy?url=...
+  Proxy -> Feeds : GET RSS XML
+  Feeds --> Proxy : XML
+  Proxy --> RSS : normalized JSON
+  RSS --> App : NewsItem[]
+
+  App -> Agg : aggregate(newsItems)
+  Agg -> Agg : cluster by title similarity
+  Agg -> Agg : compute VelocityMetrics
+  Agg --> App : AggregatedSignal[]
+
+  App -> App : filter(signals, keywords)
+  alt keyword match found
+    App -> Mon : push(signal)
+    Mon --> User : list item + alert badge
+    App -> Map : placeMarker(signal.lat, lon)
+    Map --> User : geo highlight
+  else no match
+    App --> Mon : no update
+  end
+end
+
+User -> Mon : click(signal)
+Mon -> App : requestDetails(id)
+App --> User : grouped sources + velocity panel
+@enduml

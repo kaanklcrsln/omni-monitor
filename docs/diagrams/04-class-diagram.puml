@@ -1,0 +1,227 @@
+@startuml Class_Diagram
+title Class Diagram - Omni Monitor Domain Model
+
+skinparam classAttributeIconSize 0
+
+enum PropagandaRisk {
+  low
+  medium
+  high
+}
+
+enum SentimentType {
+  positive
+  neutral
+  negative
+}
+
+enum VelocityLevel {
+  stable
+  rising
+  falling
+}
+
+enum NaturalEventCategory {
+  earthquake
+  flood
+  storm
+  volcano
+}
+
+enum PipelineType {
+  oil
+  gas
+}
+
+enum PipelineStatus {
+  active
+  planned
+  closed
+}
+
+class Feed {
+  + id: string
+  + name: string
+  + url: string
+  + type: string
+  + region: string
+  + propagandaRisk: PropagandaRisk
+}
+
+class NewsItem {
+  + id: string
+  + source: string
+  + title: string
+  + pubDate: Date
+  + isAlert: boolean
+  + lat: number [0..1]
+  + lon: number [0..1]
+  + locationName: string [0..1]
+}
+
+class AggregatedSignal {
+  + id: string
+  + primaryTitle: string
+  + sourceCount: number
+  + firstSeen: Date
+  + isAlert: boolean
+  + lat: number [0..1]
+  + lon: number [0..1]
+}
+
+class VelocityMetrics {
+  + sourcesPerHour: number
+  + level: VelocityLevel
+  + sentiment: SentimentType
+  + sentimentScore: number
+}
+
+class NaturalEvent {
+  + id: string
+  + title: string
+  + category: NaturalEventCategory
+  + date: Date
+  + lat: number
+  + lon: number
+  + closed: boolean
+}
+
+class Earthquake {
+  + id: string
+  + magnitude: number
+  + depthKm: number
+  + place: string
+  + time: Date
+  + lat: number
+  + lon: number
+}
+
+class WildfireHotspot {
+  + id: string
+  + brightness: number
+  + confidence: number
+  + acqDate: Date
+  + lat: number
+  + lon: number
+  + sensor: string
+}
+
+class Protest {
+  + id: string
+  + eventType: string
+  + actor: string
+  + date: Date
+  + lat: number
+  + lon: number
+  + fatalities: number
+}
+
+class ClimateAnomaly {
+  + id: string
+  + metric: string
+  + value: number
+  + baseline: number
+  + anomaly: number
+  + date: Date
+}
+
+class WeatherAlert {
+  + id: string
+  + severity: string
+  + description: string
+  + region: string
+  + issuedAt: Date
+}
+
+class Hotspot {
+  + id: string
+  + name: string
+  + lat: number
+  + lon: number
+  + keywords: string[]
+  + level: string
+  + escalationScore: number
+}
+
+abstract class InfrastructureAsset {
+  + id: string
+  + name: string
+  + lat: number [0..1]
+  + lon: number [0..1]
+}
+
+class Pipeline {
+  + type: PipelineType
+  + status: PipelineStatus
+  + capacityMtpa: number
+  + countries: string[]
+  + coords: Point[]
+}
+
+class Port {
+  + city: string
+  + capacityTEU: number
+}
+
+class Airport {
+  + iata: string
+  + city: string
+}
+
+class MarketQuote {
+  + symbol: string
+  + name: string
+  + price: number
+  + changePct: number
+  + updatedAt: Date
+}
+
+class Panel {
+  + id: string
+  + title: string
+  + component: string
+  + enabled: boolean
+}
+
+class MonitorKeyword {
+  + id: string
+  + phrase: string
+  + threshold: number
+  + createdAt: Date
+}
+
+InfrastructureAsset <|-- Pipeline
+InfrastructureAsset <|-- Port
+InfrastructureAsset <|-- Airport
+
+Feed "1" --> "0..*" NewsItem : publishes
+AggregatedSignal "1" *-- "1..*" NewsItem : groups
+AggregatedSignal "1" --> "0..1" VelocityMetrics : has
+AggregatedSignal "0..*" --> "0..*" Hotspot : references
+
+NaturalEvent "0..*" --> "0..*" Hotspot : occurs near
+WildfireHotspot "0..*" --> "0..*" Pipeline : threatens
+Earthquake "0..*" --> "0..*" Hotspot : located in
+Protest "0..*" --> "0..*" Hotspot : located in
+
+Panel "1" --> "0..*" NewsItem : displays
+Panel "1" --> "0..*" MarketQuote : displays
+MonitorKeyword "0..*" --> "0..*" AggregatedSignal : matches
+
+note top of Feed
+  RSS sources defined in config/feeds.ts.
+  Each Feed publishes many NewsItem.
+end note
+
+note right of AggregatedSignal
+  Produced by signal-aggregator.ts.
+  Clusters duplicate NewsItems into
+  one event-level representation.
+end note
+
+note bottom of Hotspot
+  Static geo hotspots from config/geo.ts
+  (Ankara, Istanbul, Diyarbakir, Hatay).
+end note
+
+@enduml

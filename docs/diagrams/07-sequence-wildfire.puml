@@ -1,0 +1,38 @@
+@startuml Sequence_Wildfire_Pipeline
+title Sequence Diagram - Wildfire Hotspot vs Pipeline Proximity
+
+actor User
+participant "App.ts" as App
+participant "firms-satellite.ts" as Fire
+participant "Vite Proxy\n/api/firms" as Proxy
+participant "NASA FIRMS" as FIRMS
+participant "pipelines.ts\n(config)" as Pipes
+participant "DeckGLMap" as Map
+participant "NewsPanel\n(afet/enerji)" as News
+
+App -> Fire : fetchHotspots(bbox=Turkey)
+Fire -> Proxy : GET /api/firms
+Proxy -> FIRMS : GET MODIS/VIIRS CSV
+FIRMS --> Proxy : hotspot rows
+Proxy --> Fire : parsed rows
+Fire --> App : WildfireHotspot[]
+
+App -> Pipes : getPipelines()
+Pipes --> App : Pipeline[]
+
+App -> App : computeProximity(hotspots, pipelines)
+
+alt any hotspot within threshold of pipeline
+  App -> Map : highlightSegment(pipelineId)
+  App -> News : loadRelated(panel=afet)
+  App -> News : loadRelated(panel=enerji)
+  Map --> User : visual alert on overlay
+  News --> User : related disaster/energy items
+else no proximity hit
+  App -> Map : renderHotspotsOnly()
+  Map --> User : fire points without alert
+end
+
+User -> Map : toggle pipelines overlay
+Map --> User : pipelines visible with risk flags
+@enduml

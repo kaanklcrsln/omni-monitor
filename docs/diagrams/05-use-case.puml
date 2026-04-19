@@ -1,0 +1,58 @@
+@startuml Use_Case_Diagram
+title Use Case Diagram - Omni Monitor
+
+left to right direction
+
+actor "Disaster Analyst" as DA
+actor "Environmental Analyst" as EA
+actor "Financial Analyst" as FA
+actor "Security Analyst" as SA
+
+rectangle "Omni Monitor" {
+  usecase "View Interactive Turkey Map" as UC_Map
+  usecase "Toggle Map Layers" as UC_Layers
+  usecase "Monitor Real-Time Earthquakes" as UC_EQ
+  usecase "Detect Active Wildfires" as UC_Fire
+  usecase "Assess Infrastructure Risk" as UC_Infra
+  usecase "View Pipelines Overlay" as UC_Pipe
+  usecase "View Climate & Weather Alerts" as UC_Climate
+  usecase "Monitor Protests & Conflicts" as UC_Protest
+  usecase "Monitor Financial Indicators" as UC_Fin
+  usecase "Read Filtered News Feeds" as UC_News
+  usecase "Track Custom Keywords" as UC_Keyword
+  usecase "Receive Keyword-Based Alerts" as UC_Alert
+  usecase "Configure Feed Sources" as UC_Feeds
+}
+
+DA --> UC_Map
+DA --> UC_EQ
+DA --> UC_Fire
+DA --> UC_Protest
+DA --> UC_News
+DA --> UC_Keyword
+
+EA --> UC_Map
+EA --> UC_Fire
+EA --> UC_Climate
+EA --> UC_Infra
+EA --> UC_Pipe
+
+FA --> UC_Map
+FA --> UC_Fin
+FA --> UC_News
+FA --> UC_Keyword
+
+SA --> UC_Map
+SA --> UC_Protest
+SA --> UC_Infra
+SA --> UC_Keyword
+SA --> UC_Feeds
+
+UC_EQ ..> UC_Alert : <<extend>>
+UC_Keyword ..> UC_Alert : <<include>>
+UC_Fire ..> UC_Infra : <<extend>>
+UC_Pipe ..> UC_Infra : <<include>>
+UC_Map ..> UC_Layers : <<include>>
+UC_Fin ..> UC_News : <<extend>>
+
+@enduml

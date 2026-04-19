@@ -17,14 +17,14 @@ actor "Environmental Analyst" as EA
 actor "Financial Analyst"     as FA
 
 rectangle "Omni Monitor" {
-  usecase UC1 as "View Turkey Map"
-  usecase UC2 as "Monitor Earthquakes"
-  usecase UC3 as "Detect Wildfires"
-  usecase UC4 as "Assess Infrastructure Risk"
-  usecase UC5 as "View Climate Alerts"
-  usecase UC6 as "Monitor Financial Indicators"
-  usecase UC7 as "Read News Feeds"
-  usecase UC8 as "Track Custom Keywords"
+  usecase "View Turkey Map"               as UC1
+  usecase "Monitor Earthquakes"           as UC2
+  usecase "Detect Wildfires"              as UC3
+  usecase "Assess Infrastructure Risk"    as UC4
+  usecase "View Climate Alerts"           as UC5
+  usecase "Monitor Financial Indicators"  as UC6
+  usecase "Read News Feeds"               as UC7
+  usecase "Track Custom Keywords"         as UC8
 }
 
 DA --> UC1

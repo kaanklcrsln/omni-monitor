@@ -118,7 +118,7 @@ interface TechEventMarker {
 
 // View presets with longitude, latitude, zoom
 const VIEW_PRESETS: Record<DeckMapView, { longitude: number; latitude: number; zoom: number }> = {
-  global: { longitude: 35.5, latitude: 39.0, zoom: 5.5 },
+  global: { longitude: 35.5, latitude: 39.0, zoom: 4.5 },
 };
 
 // Turkey bounds — restrict panning

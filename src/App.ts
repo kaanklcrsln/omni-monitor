@@ -2,9 +2,6 @@ import type { NewsItem, PanelConfig, MapLayers, RelatedAsset, InternetOutage, So
 import {
   FEEDS,
   INTEL_SOURCES,
-  SECTORS,
-  COMMODITIES,
-  MARKET_SYMBOLS,
   REFRESH_INTERVALS,
   DEFAULT_PANELS,
   DEFAULT_MAP_LAYERS,
@@ -12,17 +9,17 @@ import {
   STORAGE_KEYS,
   SITE_VARIANT,
 } from '@/config';
-import { fetchCategoryFeeds, fetchMultipleStocks, fetchCrypto, fetchPredictions, fetchEarthquakes, fetchWeatherAlerts, fetchInternetOutages, isOutagesConfigured, fetchAisSignals, initAisStream, getAisStatus, disconnectAisStream, isAisConfigured, fetchCableActivity, fetchProtestEvents, getProtestStatus, fetchFlightDelays, fetchMilitaryFlights, fetchMilitaryVessels, initMilitaryVesselStream, isMilitaryVesselTrackingConfigured, initDB, updateBaseline, calculateDeviation, addToSignalHistory, analysisWorker, fetchNaturalEvents, fetchCyberThreats, drainTrendingSignals } from '@/services';
+import { fetchCategoryFeeds, fetchEarthquakes, fetchWeatherAlerts, fetchInternetOutages, isOutagesConfigured, fetchAisSignals, initAisStream, getAisStatus, disconnectAisStream, isAisConfigured, fetchCableActivity, fetchProtestEvents, getProtestStatus, fetchFlightDelays, fetchMilitaryFlights, fetchMilitaryVessels, initMilitaryVesselStream, isMilitaryVesselTrackingConfigured, initDB, updateBaseline, calculateDeviation, addToSignalHistory, analysisWorker, fetchNaturalEvents, fetchCyberThreats } from '@/services';
 import { fetchCountryMarkets } from '@/services/polymarket';
 import { mlWorker } from '@/services/ml-worker';
 import { clusterNewsHybrid } from '@/services/clustering';
-import { ingestProtests, ingestFlights, ingestVessels, ingestEarthquakes, detectGeoConvergence, geoConvergenceToSignal } from '@/services/geo-convergence';
+import { ingestProtests, ingestFlights, ingestVessels, ingestEarthquakes } from '@/services/geo-convergence';
 import { signalAggregator } from '@/services/signal-aggregator';
 import { updateAndCheck } from '@/services/temporal-baseline';
 import { fetchAllFires, flattenFires } from '@/services/firms-satellite';
 import { analyzeFlightsForSurge, surgeAlertToSignal, detectForeignMilitaryPresence, foreignPresenceToSignal, type TheaterPostureSummary } from '@/services/military-surge';
 import { fetchCachedTheaterPosture } from '@/services/cached-theater-posture';
-import { ingestProtestsForCII, ingestMilitaryForCII, ingestNewsForCII, ingestOutagesForCII, ingestConflictsForCII, ingestUcdpForCII, ingestHapiForCII, ingestDisplacementForCII, ingestClimateForCII, startLearning, isInLearningMode, calculateCII, getCountryData, TIER1_COUNTRIES } from '@/services/country-instability';
+import { ingestProtestsForCII, ingestMilitaryForCII, ingestOutagesForCII, ingestConflictsForCII, ingestUcdpForCII, ingestHapiForCII, ingestDisplacementForCII, ingestClimateForCII, startLearning, isInLearningMode, calculateCII, getCountryData, TIER1_COUNTRIES } from '@/services/country-instability';
 import { dataFreshness, type DataSourceId } from '@/services/data-freshness';
 import { fetchConflictEvents } from '@/services/conflicts';
 import { fetchUcdpClassifications } from '@/services/ucdp';
@@ -43,7 +40,6 @@ import {
   type MapView,
   type TimeRange,
   NewsPanel,
-  MarketPanel,
   HeatmapPanel,
   CommoditiesPanel,
   CryptoPanel,
@@ -139,7 +135,6 @@ export class App {
   private initialUrlState: ParsedMapUrlState | null = null;
   private inFlight: Set<string> = new Set();
   private isMobile: boolean;
-  private seenGeoAlerts: Set<string> = new Set();
   private refreshTimeoutIds: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private isDestroyed = false;
   private boundKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
@@ -2469,24 +2464,11 @@ export class App {
 
     const tasks: Array<{ name: string; task: Promise<void> }> = [
       { name: 'news', task: runGuarded('news', () => this.loadNews()) },
-      { name: 'markets', task: runGuarded('markets', () => this.loadMarkets()) },
-      { name: 'predictions', task: runGuarded('predictions', () => this.loadPredictions()) },
     ];
 
-    // Load intelligence signals for CII calculation (protests, military, outages)
-    tasks.push({ name: 'intelligence', task: runGuarded('intelligence', () => this.loadIntelligenceSignals()) });
-
-    // Conditionally load non-intelligence layers
-    // NOTE: outages, protests, military are handled by loadIntelligenceSignals() above
-    // They update the map when layers are enabled, so no duplicate tasks needed here
-    tasks.push({ name: 'firms', task: runGuarded('firms', () => this.loadFirmsData()) });
     if (this.mapLayers.natural) tasks.push({ name: 'natural', task: runGuarded('natural', () => this.loadNatural()) });
     if (this.mapLayers.weather) tasks.push({ name: 'weather', task: runGuarded('weather', () => this.loadWeatherAlerts()) });
-    if (this.mapLayers.ais) tasks.push({ name: 'ais', task: runGuarded('ais', () => this.loadAisSignals()) });
-    if (this.mapLayers.cables) tasks.push({ name: 'cables', task: runGuarded('cables', () => this.loadCableActivity()) });
-    if (this.mapLayers.flights) tasks.push({ name: 'flights', task: runGuarded('flights', () => this.loadFlightDelays()) });
-    if (CYBER_LAYER_ENABLED && this.mapLayers.cyberThreats) tasks.push({ name: 'cyberThreats', task: runGuarded('cyberThreats', () => this.loadCyberThreats()) });
-    if (this.mapLayers.techEvents) tasks.push({ name: 'techEvents', task: runGuarded('techEvents', () => this.loadTechEvents()) });
+    if (this.mapLayers.fires) tasks.push({ name: 'firms', task: runGuarded('firms', () => this.loadFirmsData()) });
 
     // Use allSettled to ensure all tasks complete and search index always updates
     const results = await Promise.allSettled(tasks.map(t => t.task));
@@ -2831,82 +2813,6 @@ export class App {
       }
     } catch (error) {
       console.error('[App] Clustering failed, clusters unchanged:', error);
-    }
-  }
-
-  private async loadMarkets(): Promise<void> {
-    try {
-      const stocksResult = await fetchMultipleStocks(MARKET_SYMBOLS, {
-        onBatch: (partialStocks) => {
-          this.latestMarkets = partialStocks;
-          (this.panels['markets'] as MarketPanel).renderMarkets(partialStocks);
-        },
-      });
-
-      const finnhubConfigMsg = 'FINNHUB_API_KEY not configured — add in Settings';
-      this.latestMarkets = stocksResult.data;
-      (this.panels['markets'] as MarketPanel).renderMarkets(stocksResult.data);
-
-      if (stocksResult.skipped) {
-        if (stocksResult.data.length === 0) {
-          this.panels['markets']?.showConfigError(finnhubConfigMsg);
-        }
-        this.panels['heatmap']?.showConfigError(finnhubConfigMsg);
-      } else {
-
-        const sectorsResult = await fetchMultipleStocks(
-          SECTORS.map((s) => ({ ...s, display: s.name })),
-          {
-            onBatch: (partialSectors) => {
-              (this.panels['heatmap'] as HeatmapPanel).renderHeatmap(
-                partialSectors.map((s) => ({ name: s.name, change: s.change }))
-              );
-            },
-          }
-        );
-        (this.panels['heatmap'] as HeatmapPanel).renderHeatmap(
-          sectorsResult.data.map((s) => ({ name: s.name, change: s.change }))
-        );
-      }
-
-      const commoditiesResult = await fetchMultipleStocks(COMMODITIES, {
-        onBatch: (partialCommodities) => {
-          (this.panels['commodities'] as CommoditiesPanel).renderCommodities(
-            partialCommodities.map((c) => ({
-              display: c.display,
-              price: c.price,
-              change: c.change,
-              sparkline: c.sparkline,
-            }))
-          );
-        },
-      });
-      (this.panels['commodities'] as CommoditiesPanel).renderCommodities(
-        commoditiesResult.data.map((c) => ({ display: c.display, price: c.price, change: c.change, sparkline: c.sparkline }))
-      );
-    } catch {
-    }
-
-    try {
-      // Crypto
-      const crypto = await fetchCrypto();
-      (this.panels['crypto'] as CryptoPanel).renderCrypto(crypto);
-    } catch {
-    }
-  }
-
-  private async loadPredictions(): Promise<void> {
-    try {
-      const predictions = await fetchPredictions();
-      this.latestPredictions = predictions;
-      (this.panels['polymarket'] as PredictionPanel).renderPredictions(predictions);
-
-      dataFreshness.recordUpdate('polymarket', predictions.length);
-
-      // Run correlation analysis in background (fire-and-forget via Web Worker)
-      void this.runCorrelationAnalysis();
-    } catch (error) {
-      dataFreshness.recordError('polymarket', String(error));
     }
   }
 
@@ -3502,47 +3408,6 @@ export class App {
     monitorPanel.renderResults(this.allNews);
   }
 
-  private async runCorrelationAnalysis(): Promise<void> {
-    try {
-      // Ensure we have clusters (hybrid: semantic + Jaccard when ML available)
-      if (this.latestClusters.length === 0 && this.allNews.length > 0) {
-        this.latestClusters = mlWorker.isAvailable
-          ? await clusterNewsHybrid(this.allNews)
-          : await analysisWorker.clusterNews(this.allNews);
-      }
-
-      // Ingest news clusters for CII
-      if (this.latestClusters.length > 0) {
-        ingestNewsForCII(this.latestClusters);
-        dataFreshness.recordUpdate('gdelt', this.latestClusters.length);
-        (this.panels['cii'] as CIIPanel)?.refresh();
-      }
-
-      // Run correlation analysis off main thread via Web Worker
-      const signals = await analysisWorker.analyzeCorrelations(
-        this.latestClusters,
-        this.latestPredictions,
-        this.latestMarkets
-      );
-
-      // Detect geographic convergence (suppress during learning mode)
-      let geoSignals: ReturnType<typeof geoConvergenceToSignal>[] = [];
-      if (!isInLearningMode()) {
-        const geoAlerts = detectGeoConvergence(this.seenGeoAlerts);
-        geoSignals = geoAlerts.map(geoConvergenceToSignal);
-      }
-
-      const keywordSpikeSignals = drainTrendingSignals();
-      const allSignals = [...signals, ...geoSignals, ...keywordSpikeSignals];
-      if (allSignals.length > 0) {
-        addToSignalHistory(allSignals);
-        this.signalModal?.show(allSignals);
-      }
-    } catch (error) {
-      console.error('[App] Correlation analysis failed:', error);
-    }
-  }
-
   private async loadFirmsData(): Promise<void> {
     try {
       const fireResult = await fetchAllFires(1);
@@ -3636,29 +3501,8 @@ export class App {
 
   private setupRefreshIntervals(): void {
     this.scheduleRefresh('news', () => this.loadNews(), REFRESH_INTERVALS.feeds);
-    this.scheduleRefresh('markets', () => this.loadMarkets(), REFRESH_INTERVALS.markets);
-    this.scheduleRefresh('predictions', () => this.loadPredictions(), REFRESH_INTERVALS.predictions);
-
-    // Only refresh layer data if layer is enabled
     this.scheduleRefresh('natural', () => this.loadNatural(), 5 * 60 * 1000, () => this.mapLayers.natural);
     this.scheduleRefresh('weather', () => this.loadWeatherAlerts(), 10 * 60 * 1000, () => this.mapLayers.weather);
-
-    // Refresh intelligence signals for CII
-    // This handles outages, protests, military - updates map when layers enabled
-    this.scheduleRefresh('intelligence', () => {
-      this.intelligenceCache = {}; // Clear cache to force fresh fetch
-      return this.loadIntelligenceSignals();
-    }, 5 * 60 * 1000);
-
-    // Non-intelligence layer refreshes only
-    // NOTE: outages, protests, military are refreshed by intelligence schedule above
-    this.scheduleRefresh('firms', () => this.loadFirmsData(), 30 * 60 * 1000);
-    this.scheduleRefresh('ais', () => this.loadAisSignals(), REFRESH_INTERVALS.ais, () => this.mapLayers.ais);
-    this.scheduleRefresh('cables', () => this.loadCableActivity(), 30 * 60 * 1000, () => this.mapLayers.cables);
-    this.scheduleRefresh('flights', () => this.loadFlightDelays(), 10 * 60 * 1000, () => this.mapLayers.flights);
-    this.scheduleRefresh('cyberThreats', () => {
-      this.cyberThreatsCache = null;
-      return this.loadCyberThreats();
-    }, 10 * 60 * 1000, () => CYBER_LAYER_ENABLED && this.mapLayers.cyberThreats);
+    this.scheduleRefresh('firms', () => this.loadFirmsData(), 30 * 60 * 1000, () => this.mapLayers.fires);
   }
 }

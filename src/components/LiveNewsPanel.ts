@@ -123,13 +123,71 @@ export class LiveNewsPanel extends Panel {
     super({ id: 'live-news', title: 'Live News', showCount: false, trackActivity: false });
     this.youtubeOrigin = LiveNewsPanel.resolveYouTubeOrigin();
     this.playerElementId = `live-news-player-${Date.now()}`;
-    this.element.classList.add('panel-wide');
     this.createLiveButton();
     this.createMuteButton();
     this.createChannelSwitcher();
     this.setupBridgeMessageListener();
-    this.renderPlayer();
+    this.renderGrid();
     this.setupIdleDetection();
+  }
+
+  private renderGrid(): void {
+    if (this.channelSwitcher) this.channelSwitcher.style.display = 'none';
+    if (this.muteBtn) this.muteBtn.style.display = 'none';
+    if (this.liveBtn) this.liveBtn.style.display = 'none';
+
+    this.content.innerHTML = '';
+    const grid = document.createElement('div');
+    grid.className = 'live-news-grid';
+    grid.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,1fr);gap:4px;width:100%;height:100%;padding:4px;box-sizing:border-box;';
+
+    for (const channel of LIVE_CHANNELS) {
+      const videoId = channel.fallbackVideoId || '';
+      const tile = document.createElement('button');
+      tile.className = 'live-news-tile';
+      tile.style.cssText = 'position:relative;border:1px solid var(--border);background:#000;cursor:pointer;padding:0;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;letter-spacing:0.05em;';
+      tile.innerHTML = videoId
+        ? `<img src="https://i.ytimg.com/vi/${videoId}/hqdefault.jpg" alt="${channel.name}" style="width:100%;height:100%;object-fit:cover;opacity:0.85;" loading="lazy" onerror="this.style.display='none'"/>
+           <div style="position:absolute;inset:0;display:flex;align-items:flex-end;padding:6px;background:linear-gradient(to top,rgba(0,0,0,0.85),transparent 60%);">
+             <span style="font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,0.8);">${channel.name}</span>
+           </div>
+           <div style="position:absolute;top:6px;left:6px;background:#e53935;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:2px;letter-spacing:0.05em;">● LIVE</div>`
+        : `<span>${channel.name}</span>`;
+      tile.addEventListener('click', () => this.expandToSingle(channel));
+      grid.appendChild(tile);
+    }
+
+    this.content.appendChild(grid);
+  }
+
+  private async expandToSingle(channel: LiveChannel): Promise<void> {
+    this.activeChannel = channel;
+    if (this.channelSwitcher) this.channelSwitcher.style.display = '';
+    if (this.muteBtn) this.muteBtn.style.display = '';
+    if (this.liveBtn) this.liveBtn.style.display = '';
+
+    // Update active state in switcher
+    this.channelSwitcher?.querySelectorAll('.live-channel-btn').forEach(btn => {
+      const btnEl = btn as HTMLElement;
+      btnEl.classList.toggle('active', btnEl.dataset.channelId === channel.id);
+    });
+
+    // Add back button if not exists
+    if (!this.element.querySelector('.live-news-back')) {
+      const back = document.createElement('button');
+      back.className = 'live-news-back';
+      back.textContent = '← Geri';
+      back.style.cssText = 'position:absolute;top:8px;left:8px;z-index:10;background:rgba(0,0,0,0.7);color:#fff;border:1px solid var(--border);padding:4px 10px;font-size:11px;cursor:pointer;border-radius:3px;';
+      back.addEventListener('click', () => {
+        back.remove();
+        this.renderGrid();
+      });
+      this.element.style.position = 'relative';
+      this.element.appendChild(back);
+    }
+
+    await this.resolveChannelVideo(channel);
+    this.renderPlayer();
   }
 
   private get embedOrigin(): string {

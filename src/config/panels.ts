@@ -6,7 +6,6 @@ import type { PanelConfig, MapLayers } from '@/types';
 const TURKEY_PANELS: Record<string, PanelConfig> = {
   map: { name: 'Türkiye Haritası', enabled: true, priority: 1 },
   'live-news': { name: 'Son Dakika', enabled: true, priority: 1 },
-  turkey: { name: 'HABERLER', enabled: true, priority: 1 },
   economic: { name: 'EKONOMİ', enabled: true, priority: 1 },
 };
 

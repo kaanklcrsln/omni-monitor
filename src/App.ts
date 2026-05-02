@@ -12,7 +12,7 @@ import {
   STORAGE_KEYS,
   SITE_VARIANT,
 } from '@/config';
-import { fetchCategoryFeeds, fetchMultipleStocks, fetchCrypto, fetchPredictions, fetchEarthquakes, fetchWeatherAlerts, fetchFredData, fetchInternetOutages, isOutagesConfigured, fetchAisSignals, initAisStream, getAisStatus, disconnectAisStream, isAisConfigured, fetchCableActivity, fetchProtestEvents, getProtestStatus, fetchFlightDelays, fetchMilitaryFlights, fetchMilitaryVessels, initMilitaryVesselStream, isMilitaryVesselTrackingConfigured, initDB, updateBaseline, calculateDeviation, addToSignalHistory, analysisWorker, fetchNaturalEvents, fetchRecentAwards, fetchOilAnalytics, fetchCyberThreats, drainTrendingSignals } from '@/services';
+import { fetchCategoryFeeds, fetchMultipleStocks, fetchCrypto, fetchPredictions, fetchEarthquakes, fetchWeatherAlerts, fetchInternetOutages, isOutagesConfigured, fetchAisSignals, initAisStream, getAisStatus, disconnectAisStream, isAisConfigured, fetchCableActivity, fetchProtestEvents, getProtestStatus, fetchFlightDelays, fetchMilitaryFlights, fetchMilitaryVessels, initMilitaryVesselStream, isMilitaryVesselTrackingConfigured, initDB, updateBaseline, calculateDeviation, addToSignalHistory, analysisWorker, fetchNaturalEvents, fetchCyberThreats, drainTrendingSignals } from '@/services';
 import { fetchCountryMarkets } from '@/services/polymarket';
 import { mlWorker } from '@/services/ml-worker';
 import { clusterNewsHybrid } from '@/services/clustering';
@@ -31,7 +31,7 @@ import { fetchUcdpEvents, deduplicateAgainstAcled } from '@/services/ucdp-events
 import { fetchUnhcrPopulation } from '@/services/unhcr';
 import { fetchClimateAnomalies } from '@/services/climate';
 import { enrichEventsWithExposure } from '@/services/population-exposure';
-import { buildMapUrl, debounce, loadFromStorage, parseMapUrlState, saveToStorage, getCircuitBreakerCooldownInfo, isMobileDevice, setTheme, getCurrentTheme } from '@/utils';
+import { buildMapUrl, debounce, loadFromStorage, parseMapUrlState, saveToStorage, isMobileDevice, setTheme, getCurrentTheme } from '@/utils';
 import { reverseGeocode } from '@/utils/reverse-geocode';
 import { CountryBriefPage } from '@/components/CountryBriefPage';
 import { maybeShowDownloadBanner } from '@/components/DownloadBanner';
@@ -50,8 +50,8 @@ import {
   PredictionPanel,
   MonitorPanel,
   Panel,
-  SignalModal,
   EconomicPanel,
+  SignalModal,
   SearchModal,
   MobileWarningModal,
   GdeltIntelPanel,
@@ -87,7 +87,6 @@ import { STARTUP_ECOSYSTEMS } from '@/config/startup-ecosystems';
 import { TECH_HQS, ACCELERATORS } from '@/config/tech-geo';
 import { STOCK_EXCHANGES, FINANCIAL_CENTERS, CENTRAL_BANKS, COMMODITY_HUBS } from '@/config/finance-geo';
 import { isDesktopRuntime } from '@/services/runtime';
-import { isFeatureAvailable } from '@/services/runtime-config';
 import { invokeTauri } from '@/services/tauri-bridge';
 import { getCountryAtCoordinates, hasCountryGeometry, isCoordinateInCountry, preloadCountryGeometry } from '@/services/country-geometry';
 
@@ -475,7 +474,7 @@ export class App {
     const el = document.getElementById('headerClock');
     if (!el) return;
     const tick = () => {
-      el.textContent = new Date().toUTCString().replace('GMT', 'UTC');
+      el.textContent = new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul', hour: '2-digit', minute: '2-digit', second: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
     };
     tick();
     setInterval(tick, 1000);
@@ -1421,7 +1420,6 @@ export class App {
         </div>
         <div class="header-right">
           <button class="search-btn" id="searchBtn"><kbd>⌘K</kbd> Search</button>
-          ${this.isDesktopApp ? '' : '<button class="copy-link-btn" id="copyLinkBtn">Copy Link</button>'}
           <button class="theme-toggle-btn" id="headerThemeToggle" title="Toggle dark/light mode">
             ${getCurrentTheme() === 'dark'
               ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>'
@@ -1429,15 +1427,12 @@ export class App {
           </button>
           ${this.isDesktopApp ? '' : '<button class="fullscreen-btn" id="fullscreenBtn" title="Toggle Fullscreen">⛶</button>'}
           <button class="settings-btn" id="settingsBtn">⚙ PANELS</button>
-          <button class="sources-btn" id="sourcesBtn">📡 SOURCES</button>
         </div>
       </div>
       <div class="main-content">
         <div class="map-section" id="mapSection">
           <div class="panel-header">
-            <div class="panel-header-left">
-              <span class="panel-title">Türkiye Durum</span>
-            </div>
+          
             <span class="header-clock" id="headerClock"></span>
             <button class="map-pin-btn" id="mapPinBtn" title="Pin map to top">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1773,8 +1768,6 @@ export class App {
       this.panels[panelKey] = panel;
     }
 
-    // Apply full-width layout to HABERLER panel
-    this.panels['turkey']?.getElement().classList.add('panel-full');
 
     // Geopolitical panels
     const gdeltIntelPanel = new GdeltIntelPanel();
@@ -2478,9 +2471,6 @@ export class App {
       { name: 'news', task: runGuarded('news', () => this.loadNews()) },
       { name: 'markets', task: runGuarded('markets', () => this.loadMarkets()) },
       { name: 'predictions', task: runGuarded('predictions', () => this.loadPredictions()) },
-      { name: 'fred', task: runGuarded('fred', () => this.loadFredData()) },
-      { name: 'oil', task: runGuarded('oil', () => this.loadOilAnalytics()) },
-      { name: 'spending', task: runGuarded('spending', () => this.loadGovernmentSpending()) },
     ];
 
     // Load intelligence signals for CII calculation (protests, military, outages)
@@ -3507,62 +3497,6 @@ export class App {
   }
 
 
-  private async loadFredData(): Promise<void> {
-    const economicPanel = this.panels['economic'] as EconomicPanel;
-    const cbInfo = getCircuitBreakerCooldownInfo('FRED Economic');
-    if (cbInfo.onCooldown) {
-      economicPanel?.setErrorState(true, `Temporarily unavailable (retry in ${cbInfo.remainingSeconds}s)`);
-      return;
-    }
-
-    try {
-      economicPanel?.setLoading(true);
-      const data = await fetchFredData();
-
-      // Check if circuit breaker tripped after fetch
-      const postInfo = getCircuitBreakerCooldownInfo('FRED Economic');
-      if (postInfo.onCooldown) {
-        economicPanel?.setErrorState(true, `Temporarily unavailable (retry in ${postInfo.remainingSeconds}s)`);
-        return;
-      }
-
-      if (data.length === 0) {
-        const reason = isFeatureAvailable('economicFred')
-          ? 'FRED data temporarily unavailable — will retry'
-          : 'FRED_API_KEY not configured — add in Settings';
-        economicPanel?.setErrorState(true, reason);
-        return;
-      }
-
-      economicPanel?.setErrorState(false);
-      economicPanel?.update(data);
-      dataFreshness.recordUpdate('economic', data.length);
-    } catch {
-      economicPanel?.setErrorState(true, 'FRED data temporarily unavailable — will retry');
-      economicPanel?.setLoading(false);
-    }
-  }
-
-  private async loadOilAnalytics(): Promise<void> {
-    const economicPanel = this.panels['economic'] as EconomicPanel;
-    try {
-      const data = await fetchOilAnalytics();
-      economicPanel?.updateOil(data);
-    } catch (e) {
-      console.error('[App] Oil analytics failed:', e);
-    }
-  }
-
-  private async loadGovernmentSpending(): Promise<void> {
-    const economicPanel = this.panels['economic'] as EconomicPanel;
-    try {
-      const data = await fetchRecentAwards({ daysBack: 7, limit: 15 });
-      economicPanel?.updateSpending(data);
-    } catch (e) {
-      console.error('[App] Government spending failed:', e);
-    }
-  }
-
   private updateMonitorResults(): void {
     const monitorPanel = this.panels['monitors'] as MonitorPanel;
     monitorPanel.renderResults(this.allNews);
@@ -3708,9 +3642,6 @@ export class App {
     // Only refresh layer data if layer is enabled
     this.scheduleRefresh('natural', () => this.loadNatural(), 5 * 60 * 1000, () => this.mapLayers.natural);
     this.scheduleRefresh('weather', () => this.loadWeatherAlerts(), 10 * 60 * 1000, () => this.mapLayers.weather);
-    this.scheduleRefresh('fred', () => this.loadFredData(), 30 * 60 * 1000);
-    this.scheduleRefresh('oil', () => this.loadOilAnalytics(), 30 * 60 * 1000);
-    this.scheduleRefresh('spending', () => this.loadGovernmentSpending(), 60 * 60 * 1000);
 
     // Refresh intelligence signals for CII
     // This handles outages, protests, military - updates map when layers enabled

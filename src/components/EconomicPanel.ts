@@ -3,16 +3,15 @@ import type { FredSeries } from '@/services/fred';
 import type { OilAnalytics } from '@/services/oil-analytics';
 import type { SpendingSummary } from '@/services/usa-spending';
 
-const CHARTS: { symbol: string; name: string }[] = [
-  { symbol: 'OANDA:XAUTRYZ', name: 'Altın / TRY (XAUTRYZ)' },
-  { symbol: 'TVC:UKOIL',     name: 'Brent Ham Petrol (UKOIL)' },
-  { symbol: 'OANDA:XAGUSD',  name: 'Gümüş / USD (XAGUSD)' },
+const CHARTS: { symbol: string; name: string; formula?: boolean }[] = [
+  { symbol: 'OANDA:XAUTRY/31.1035', name: 'Gram Altın / TRY', formula: true },
+  { symbol: 'TVC:UKOIL',            name: 'Brent Ham Petrol (UKOIL)' },
+  { symbol: 'OANDA:XAGUSD',         name: 'Gümüş / USD (XAGUSD)' },
 ];
 
 export class EconomicPanel extends Panel {
   constructor() {
     super({ id: 'economic', title: 'EKONOMİ' });
-    this.element.classList.add('panel-full');
     this.renderCharts();
   }
 
@@ -30,18 +29,6 @@ export class EconomicPanel extends Panel {
     container.style.cssText = 'display:flex;flex-direction:column;gap:6px;padding:6px;height:100%;overflow-y:auto;box-sizing:border-box;';
 
     for (const chart of CHARTS) {
-      const config = JSON.stringify({
-        symbol: chart.symbol,
-        width: '100%',
-        height: 160,
-        locale: 'tr',
-        dateRange: '3M',
-        colorTheme: 'dark',
-        isTransparent: true,
-        autosize: false,
-        largeChartUrl: '',
-      });
-
       const wrapper = document.createElement('div');
       wrapper.style.cssText = 'flex-shrink:0;';
 
@@ -51,8 +38,39 @@ export class EconomicPanel extends Panel {
       wrapper.appendChild(label);
 
       const iframe = document.createElement('iframe');
-      iframe.src = `https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.html?locale=tr#${JSON.stringify(config)}`;
-      iframe.style.cssText = 'width:100%;height:160px;border:0;display:block;';
+      if (chart.formula) {
+        // Advanced chart embed supports formula symbols (e.g. XAUTRY/31.1035)
+        const params = new URLSearchParams({
+          symbol: chart.symbol,
+          interval: 'D',
+          hidesidetoolbar: '1',
+          hidetoptoolbar: '1',
+          hide_top_toolbar: '1',
+          hide_legend: '0',
+          saveimage: '0',
+          toolbarbg: '0a0f0a',
+          theme: 'dark',
+          style: '3',
+          timezone: 'Europe/Istanbul',
+          locale: 'tr',
+          withdateranges: '1',
+        });
+        iframe.src = `https://s.tradingview.com/widgetembed/?${params.toString()}`;
+      } else {
+        const config = JSON.stringify({
+          symbol: chart.symbol,
+          width: '100%',
+          height: 160,
+          locale: 'tr',
+          dateRange: '3M',
+          colorTheme: 'dark',
+          isTransparent: true,
+          autosize: false,
+          largeChartUrl: '',
+        });
+        iframe.src = `https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.html?locale=tr#${config}`;
+      }
+      iframe.style.cssText = 'width:100%;height:200px;border:0;display:block;';
       iframe.setAttribute('allowtransparency', 'true');
       wrapper.appendChild(iframe);
 

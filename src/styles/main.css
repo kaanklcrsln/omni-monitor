@@ -618,8 +618,7 @@ canvas,
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
   background: var(--bg);
   width: 100%;
 }
@@ -723,13 +722,15 @@ canvas,
 
 .panels-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  grid-auto-rows: minmax(200px, 380px);
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr;
   gap: 4px;
   padding: 4px;
-  align-content: start;
+  align-content: stretch;
   align-items: stretch;
   min-height: 0;
+  flex: 1 1 0;
+  overflow: hidden;
   position: relative;
   z-index: 1; /* This ensures panels scroll UNDER the pinned map (z-index: 100) */
 }

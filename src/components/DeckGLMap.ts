@@ -118,11 +118,10 @@ interface TechEventMarker {
 
 // View presets with longitude, latitude, zoom
 const VIEW_PRESETS: Record<DeckMapView, { longitude: number; latitude: number; zoom: number }> = {
-  global: { longitude: 35.5, latitude: 39.0, zoom: 4.5 },
+  global: { longitude: 35.5, latitude: 39.0, zoom: 5.0 },
 };
 
 // Turkey bounds — restrict panning
-const TURKEY_BOUNDS: [[number, number], [number, number]] = [[24, 34], [47, 44]];
 
 const MAP_INTERACTION_MODE: MapInteractionMode =
   import.meta.env.VITE_MAP_INTERACTION_MODE === 'flat' ? 'flat' : '3d';
@@ -413,7 +412,6 @@ export class DeckGLMap {
       zoom: preset.zoom,
       attributionControl: false,
       interactive: true,
-      maxBounds: TURKEY_BOUNDS,
       ...(MAP_INTERACTION_MODE === 'flat'
         ? {
             maxPitch: 0,
